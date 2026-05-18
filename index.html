@@ -1,0 +1,226 @@
+<html>
+<head>
+<title>Page Title</title>
+</head>
+<body>
+
+<h1>This is a Heading</h1>
+<p>This is a paragraph.</p>
+// ===== APPS SCRIPT CODE =====
+// แก้ไข SHEET_ID ให้ตรงกับของคุณ
+const SHEET_ID = '1gUfYTrg7pT7sIyCREhRPeQstCtWLtad2T5l2pHNqKTE';
+
+// ===== GET REQUESTS =====
+function doGet(e) {
+  const action = e.parameter.action;
+  
+  try {
+    if (action === 'getAll') {
+      return getAll();
+    }
+    return sendResponse({ error: 'invalid action' });
+  } catch (error) {
+    return sendResponse({ error: error.toString() });
+  }
+}
+
+// ===== POST REQUESTS =====
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const action = body.action;
+    
+    if (action === 'checkin') {
+      return saveCheckin(body.data);
+    } else if (action === 'saveStudents') {
+      return saveStudents(body.data);
+    } else if (action === 'saveLabs') {
+      return saveLabs(body.data);
+    }
+    
+    return sendResponse({ success: true });
+  } catch (error) {
+    return sendResponse({ error: error.toString() });
+  }
+}
+
+// ===== GET ALL DATA =====
+function getAll() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  
+  // Get or create sheets
+  let stdSheet = ss.getSheetByName('std');
+  if (!stdSheet) stdSheet = ss.insertSheet('std');
+  
+  let ciSheet = ss.getSheetByName('checkin');
+  if (!ciSheet) ciSheet = ss.insertSheet('checkin');
+  
+  let labSheet = ss.getSheetByName('labs');
+  if (!labSheet) labSheet = ss.insertSheet('labs');
+  
+  // Initialize headers if empty
+  if (stdSheet.getLastRow() === 0) {
+    stdSheet.appendRow(['เลขประจำตัว', 'ชื่อ-สกุล', 'ชั้น']);
+  }
+  if (ciSheet.getLastRow() === 0) {
+    ciSheet.appendRow(['เลขประจำตัว', 'ชื่อ-สกุล', 'ชั้น', 'ห้องปฏิบัติการ', 'วันเวลา']);
+  }
+  
+  // Get students
+  const students = [];
+  if (stdSheet.getLastRow() > 1) {
+    const stdData = stdSheet.getRange(2, 1, stdSheet.getLastRow() - 1, 3).getValues();
+    stdData.forEach(row => {
+      if (row[0]) {
+        students.push({
+          id: String(row[0]).trim(),
+          name: String(row[1]).trim(),
+          class: String(row[2]).trim()
+        });
+      }
+    });
+  }
+  
+  // Get checkins with formatted dates
+  const checkins = [];
+  if (ciSheet.getLastRow() > 1) {
+    const ciData = ciSheet.getRange(2, 1, ciSheet.getLastRow() - 1, 5).getValues();
+    ciData.forEach(row => {
+      if (row[0]) {
+        const dateObj = row[4];
+        let dateStr = '';
+        let timeStr = '';
+        
+        if (dateObj instanceof Date) {
+          dateStr = formatThaiDate(dateObj);
+          timeStr = formatThaiTime(dateObj);
+        } else if (typeof dateObj === 'string') {
+          try {
+            const d = new Date(dateObj);
+            if (!isNaN(d)) {
+              dateStr = formatThaiDate(d);
+              timeStr = formatThaiTime(d);
+            }
+          } catch (e) {}
+        }
+        
+        checkins.push({
+          id: String(row[0]).trim(),
+          name: String(row[1]).trim(),
+          class: String(row[2]).trim(),
+          lab: String(row[3]).trim(),
+          date: String(row[4]),
+          dateStr: dateStr,
+          timeStr: timeStr
+        });
+      }
+    });
+  }
+  
+  // Get labs
+  const labs = [];
+  if (labSheet.getLastRow() > 0) {
+    const labData = labSheet.getRange(1, 1, labSheet.getLastRow(), 1).getValues();
+    labData.forEach(row => {
+      if (row[0]) {
+        labs.push(String(row[0]).trim());
+      }
+    });
+  }
+  
+  // Initialize default labs if empty
+  if (labs.length === 0) {
+    const defaultLabs = ['ห้องคอมพิวเตอร์ 1', 'ห้องคอมพิวเตอร์ 2', 'ห้องคอมพิวเตอร์ 3'];
+    labSheet.clear();
+    defaultLabs.forEach(lab => labSheet.appendRow([lab]));
+    return sendResponse({ students, checkins, labs: defaultLabs });
+  }
+  
+  return sendResponse({ students, checkins, labs });
+}
+
+// ===== SAVE CHECKIN =====
+function saveCheckin(data) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('checkin');
+  
+  if (!sheet) sheet = ss.insertSheet('checkin');
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['เลขประจำตัว', 'ชื่อ-สกุล', 'ชั้น', 'ห้องปฏิบัติการ', 'วันเวลา']);
+  }
+  
+  sheet.appendRow([
+    data.id,
+    data.name,
+    data.class,
+    data.lab,
+    new Date(data.date)
+  ]);
+  
+  return sendResponse({ success: true });
+}
+
+// ===== SAVE STUDENTS =====
+function saveStudents(data) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('std');
+  
+  if (!sheet) sheet = ss.insertSheet('std');
+  sheet.clear();
+  sheet.appendRow(['เลขประจำตัว', 'ชื่อ-สกุล', 'ชั้น']);
+  
+  if (data.length > 0) {
+    // Sort by class then by ID
+    const sorted = data.sort((a, b) => {
+      if (a.class !== b.class) {
+        return a.class.localeCompare(b.class, 'th');
+      }
+      return a.id.localeCompare(b.id);
+    });
+    
+    const values = sorted.map(s => [s.id, s.name, s.class]);
+    sheet.getRange(2, 1, values.length, 3).setValues(values);
+  }
+  
+  return sendResponse({ success: true });
+}
+
+// ===== SAVE LABS =====
+function saveLabs(data) {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('labs');
+  
+  if (!sheet) sheet = ss.insertSheet('labs');
+  sheet.clear();
+  
+  if (data.length > 0) {
+    const values = data.map(l => [l]);
+    sheet.getRange(1, 1, values.length, 1).setValues(values);
+  }
+  
+  return sendResponse({ success: true });
+}
+
+// ===== THAI DATE FORMAT =====
+function formatThaiDate(date) {
+  const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+  const day = date.getDate();
+  const month = thaiMonths[date.getMonth()];
+  const year = date.getFullYear() + 543;
+  return `${day} ${month} ${year}`;
+}
+
+function formatThaiTime(date) {
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  const s = String(date.getSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
+// ===== SEND RESPONSE =====
+function sendResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+</body>
+</html>
