@@ -1,3 +1,11 @@
+<html>
+<head>
+<title>Page Title</title>
+</head>
+<body>
+
+<h1>This is a Heading</h1>
+<p>This is a paragraph.</p>
 // ===== APPS SCRIPT CODE =====
 // แก้ไข SHEET_ID ให้ตรงกับของคุณ
 const SHEET_ID = '1gUfYTrg7pT7sIyCREhRPeQstCtWLtad2T5l2pHNqKTE';
@@ -214,3 +222,5 @@ function sendResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
+</body>
+</html>
