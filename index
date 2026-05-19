@@ -19,7 +19,7 @@
 
     <!-- ระบุ Web App URL -->
     <div class="alert alert-warning">
-        <label for="scriptUrl" class="form-label fw-bold">Google Apps Script Web App URL (วาง URL ที่นี่ก่อนใช้งาน)</label>
+        <label for="scriptUrl" class="form-label fw-bold">Google Apps Script Web App URL (https://script.google.com/macros/s/AKfycbzolJpPJQn4Zcvq094eh-ugA-eRPV6zdOCjKOesE0zAZrvH7avkc_siFaYWXtne-yvS/exec)</label>
         <input type="text" class="form-control" id="scriptUrl" placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec">
     </div>
 
